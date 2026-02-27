@@ -1,0 +1,9 @@
+{
+  "agents": {
+    "codereview_ai": {
+      "agent_id": "69a1f10fa9ff34dc03db5b46",
+      "name": "CodeReview AI Agent",
+      "type": "json"
+    }
+  }
+}

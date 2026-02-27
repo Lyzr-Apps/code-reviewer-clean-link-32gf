@@ -1,0 +1,42 @@
+{
+  "agent_name": "CodeReview AI Agent",
+  "agent_id": "69a1f10fa9ff34dc03db5b46",
+  "agent_type": "json",
+  "accessor": "json",
+  "has_module_outputs": false,
+  "response_schema": {
+    "overall_score": "number (1-10)",
+    "summary": "string",
+    "total_issues": "number",
+    "critical_issues": "number",
+    "warnings": "number",
+    "suggestions": "number",
+    "categories": {
+      "code_quality": { "score": "number", "issues_count": "number" },
+      "security": { "score": "number", "issues_count": "number" },
+      "performance": { "score": "number", "issues_count": "number" },
+      "best_practices": { "score": "number", "issues_count": "number" }
+    },
+    "issues": [
+      {
+        "id": "number",
+        "severity": "critical|warning|suggestion|info",
+        "category": "code_quality|security|performance|best_practices",
+        "title": "string",
+        "description": "string",
+        "file": "string",
+        "line": "string",
+        "code_snippet": "string",
+        "suggestion": "string",
+        "suggested_code": "string"
+      }
+    ],
+    "positive_highlights": ["string"],
+    "review_metadata": {
+      "files_reviewed": "number",
+      "lines_analyzed": "number",
+      "review_duration": "string",
+      "languages_detected": ["string"]
+    }
+  }
+}

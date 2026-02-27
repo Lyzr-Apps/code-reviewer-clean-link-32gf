@@ -1,0 +1,110 @@
+{
+  "agent_name": "CodeReview AI Agent",
+  "agent_id": "69a1f10fa9ff34dc03db5b46",
+  "description": "An AI-powered code review agent that analyzes GitHub pull requests and code submissions for quality issues, security vulnerabilities, performance problems, and best practice violations. Provides structured, actionable feedback with severity ratings.",
+  "agent_type": "json",
+  "accessor": "result",
+  "auto_generated": true,
+  "response_schema": {
+    "overall_score": "number",
+    "summary": "string",
+    "total_issues": "number",
+    "critical_issues": "number",
+    "warnings": "number",
+    "suggestions": "number",
+    "categories": {
+      "code_quality": {
+        "score": "number",
+        "issues_count": "number"
+      },
+      "security": {
+        "score": "number",
+        "issues_count": "number"
+      },
+      "performance": {
+        "score": "number",
+        "issues_count": "number"
+      },
+      "best_practices": {
+        "score": "number",
+        "issues_count": "number"
+      }
+    },
+    "issues": [
+      {
+        "id": "number",
+        "severity": "string",
+        "category": "string",
+        "title": "string",
+        "description": "string",
+        "file": "string",
+        "line": "string",
+        "code_snippet": "string",
+        "suggestion": "string",
+        "suggested_code": "string"
+      }
+    ],
+    "positive_highlights": [
+      "string"
+    ],
+    "review_metadata": {
+      "files_reviewed": "number",
+      "lines_analyzed": "number",
+      "review_duration": "string",
+      "languages_detected": [
+        "string"
+      ]
+    }
+  },
+  "example_response": {
+    "overall_score": 0,
+    "summary": "sample string",
+    "total_issues": 0,
+    "critical_issues": 0,
+    "warnings": 0,
+    "suggestions": 0,
+    "categories": {
+      "code_quality": {
+        "score": 0,
+        "issues_count": 0
+      },
+      "security": {
+        "score": 0,
+        "issues_count": 0
+      },
+      "performance": {
+        "score": 0,
+        "issues_count": 0
+      },
+      "best_practices": {
+        "score": 0,
+        "issues_count": 0
+      }
+    },
+    "issues": [
+      {
+        "id": 0,
+        "severity": "sample string",
+        "category": "sample string",
+        "title": "sample string",
+        "description": "sample string",
+        "file": "sample string",
+        "line": "sample string",
+        "code_snippet": "sample string",
+        "suggestion": "sample string",
+        "suggested_code": "sample string"
+      }
+    ],
+    "positive_highlights": [
+      "sample string"
+    ],
+    "review_metadata": {
+      "files_reviewed": 0,
+      "lines_analyzed": 0,
+      "review_duration": "sample string",
+      "languages_detected": [
+        "sample string"
+      ]
+    }
+  }
+}
