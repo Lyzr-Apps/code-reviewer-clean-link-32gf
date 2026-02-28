@@ -7,10 +7,12 @@ import { Badge } from '@/components/ui/badge'
 import { Switch } from '@/components/ui/switch'
 import { Label } from '@/components/ui/label'
 import { Separator } from '@/components/ui/separator'
-import { FiGitPullRequest, FiCheckCircle, FiClock, FiFile, FiHash, FiActivity, FiCpu } from 'react-icons/fi'
-import { VscCode } from 'react-icons/vsc'
+import { FiGitPullRequest, FiCheckCircle, FiClock, FiFile, FiHash, FiActivity, FiCpu, FiGithub, FiCode } from 'react-icons/fi'
+import { VscCode, VscRepo } from 'react-icons/vsc'
 
 import CodeInput from './sections/CodeInput'
+import RepoInput from './sections/RepoInput'
+import type { RepoFile } from './sections/RepoInput'
 import ScoreOverview from './sections/ScoreOverview'
 import CategoryBreakdown from './sections/CategoryBreakdown'
 import IssuesList from './sections/IssuesList'
@@ -355,8 +357,11 @@ function AgentStatus({ isActive }: { isActive: boolean }) {
 }
 
 // ─── Main Page ──────────────────────────────────────────────────────────────
+type InputMode = 'paste' | 'repo'
+
 export default function Page() {
   // State
+  const [inputMode, setInputMode] = useState<InputMode>('paste')
   const [code, setCode] = useState('')
   const [fileName, setFileName] = useState('')
   const [language, setLanguage] = useState('Auto-detect')
@@ -365,6 +370,8 @@ export default function Page() {
   const [reviewResult, setReviewResult] = useState<CodeReviewResult | null>(null)
   const [showSampleData, setShowSampleData] = useState(false)
   const [, setActiveAgentId] = useState<string | null>(null)
+  const [repoContext, setRepoContext] = useState<{ owner: string; repo: string; branch: string } | null>(null)
+  const [loadingMessage, setLoadingMessage] = useState<string>('Analyzing your code...')
 
   // The displayed data — either from agent or sample
   const displayData = useMemo(() => {
@@ -372,12 +379,33 @@ export default function Page() {
     return reviewResult
   }, [showSampleData, reviewResult])
 
-  // Submit code for review
+  // Helper to parse agent result
+  const parseAgentResult = useCallback((result: any): CodeReviewResult | null => {
+    if (!result?.success) return null
+    let parsed = result?.response?.result
+    if (typeof parsed === 'string') {
+      try {
+        parsed = JSON.parse(parsed)
+      } catch {
+        parsed = {
+          summary: parsed, overall_score: 0, total_issues: 0,
+          critical_issues: 0, warnings: 0, suggestions: 0,
+          categories: {}, issues: [], positive_highlights: [],
+          review_metadata: {},
+        }
+      }
+    }
+    return parsed as CodeReviewResult
+  }, [])
+
+  // Submit code for review (paste mode)
   const handleSubmit = useCallback(async () => {
     if (!code.trim()) return
     setLoading(true)
     setError(null)
     setActiveAgentId(AGENT_ID)
+    setLoadingMessage('Analyzing your code...')
+    setRepoContext(null)
 
     try {
       const languageHint = language !== 'Auto-detect' ? `\nLanguage: ${language}` : ''
@@ -387,16 +415,8 @@ export default function Page() {
       const result = await callAIAgent(message, AGENT_ID)
 
       if (result.success) {
-        let parsed = result?.response?.result
-        if (typeof parsed === 'string') {
-          try {
-            parsed = JSON.parse(parsed)
-          } catch {
-            // If it's a string but not JSON, wrap it
-            parsed = { summary: parsed, overall_score: 0, total_issues: 0, critical_issues: 0, warnings: 0, suggestions: 0, categories: {}, issues: [], positive_highlights: [], review_metadata: {} }
-          }
-        }
-        setReviewResult(parsed as CodeReviewResult)
+        const parsed = parseAgentResult(result)
+        if (parsed) setReviewResult(parsed)
       } else {
         setError(result?.error ?? 'Failed to get review results. Please try again.')
       }
@@ -406,7 +426,60 @@ export default function Page() {
       setLoading(false)
       setActiveAgentId(null)
     }
-  }, [code, fileName, language])
+  }, [code, fileName, language, parseAgentResult])
+
+  // Submit repo files for review (repo mode)
+  const handleRepoSubmit = useCallback(async (
+    files: RepoFile[],
+    repoInfo: { owner: string; repo: string; branch: string }
+  ) => {
+    if (files.length === 0) return
+    setLoading(true)
+    setError(null)
+    setActiveAgentId(AGENT_ID)
+    setRepoContext(repoInfo)
+    setLoadingMessage(`Analyzing ${files.length} files from ${repoInfo.owner}/${repoInfo.repo}...`)
+
+    try {
+      // Build a combined message with all files
+      const fileContents = files.map(f =>
+        `--- FILE: ${f.path} (${f.language}) ---\n${f.content}`
+      ).join('\n\n')
+
+      const totalLines = files.reduce((sum, f) => sum + f.content.split('\n').length, 0)
+      const languages = [...new Set(files.map(f => f.language).filter(l => l && l !== 'Unknown'))]
+
+      const message = `Review the following GitHub repository code from ${repoInfo.owner}/${repoInfo.repo} (branch: ${repoInfo.branch}).
+
+Repository contains ${files.length} code files across ${languages.length} languages: ${languages.join(', ')}.
+Total lines of code: ${totalLines}.
+
+Analyze ALL files together as a complete codebase. Look for:
+- Cross-file issues (inconsistent patterns, missing imports, circular dependencies)
+- Security vulnerabilities across the entire codebase
+- Architecture and design pattern issues
+- Code quality and consistency across files
+- Performance bottlenecks that may span multiple files
+
+Here are all the files:
+
+${fileContents}`
+
+      const result = await callAIAgent(message, AGENT_ID)
+
+      if (result.success) {
+        const parsed = parseAgentResult(result)
+        if (parsed) setReviewResult(parsed)
+      } else {
+        setError(result?.error ?? 'Failed to get review results. Please try again.')
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'An unexpected error occurred.')
+    } finally {
+      setLoading(false)
+      setActiveAgentId(null)
+    }
+  }, [parseAgentResult])
 
   // When sample data is toggled on, fill in sample code
   const handleSampleToggle = useCallback((checked: boolean) => {
@@ -415,13 +488,13 @@ export default function Page() {
       setCode(SAMPLE_CODE)
       setFileName('processUserData.js')
       setLanguage('JavaScript')
+      setInputMode('paste')
     } else {
       if (code === SAMPLE_CODE) {
         setCode('')
         setFileName('')
         setLanguage('Auto-detect')
       }
-      // Keep reviewResult intact — just switch display
     }
   }, [code])
 
@@ -432,48 +505,83 @@ export default function Page() {
       <div style={THEME_VARS} className="min-h-screen bg-slate-950 text-slate-100">
         {/* Header */}
         <header className="border-b border-slate-800/80 bg-slate-950/80 backdrop-blur-md sticky top-0 z-50">
-          <div className="max-w-6xl mx-auto px-4 sm:px-6 py-4 flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="flex items-center justify-center w-10 h-10 rounded-xl bg-gradient-to-br from-cyan-500/20 to-blue-600/20 border border-cyan-500/30 shadow-lg shadow-cyan-500/10">
-                <FiGitPullRequest className="w-5 h-5 text-cyan-400" />
+          <div className="max-w-6xl mx-auto px-4 sm:px-6 py-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="flex items-center justify-center w-10 h-10 rounded-xl bg-gradient-to-br from-cyan-500/20 to-blue-600/20 border border-cyan-500/30 shadow-lg shadow-cyan-500/10">
+                  <FiGitPullRequest className="w-5 h-5 text-cyan-400" />
+                </div>
+                <div>
+                  <h1 className="text-xl font-bold text-slate-100 tracking-tight">
+                    CodeReview AI
+                  </h1>
+                  <p className="text-xs text-slate-500">
+                    Automated Code Review & Analysis
+                  </p>
+                </div>
               </div>
-              <div>
-                <h1 className="text-xl font-bold text-slate-100 tracking-tight">
-                  CodeReview AI
-                </h1>
-                <p className="text-xs text-slate-500">
-                  Automated Code Review & Analysis
-                </p>
+
+              {/* Sample Data Toggle */}
+              <div className="flex items-center gap-2">
+                <Label htmlFor="sample-toggle" className="text-xs text-slate-500 cursor-pointer">
+                  Sample Data
+                </Label>
+                <Switch
+                  id="sample-toggle"
+                  checked={showSampleData}
+                  onCheckedChange={handleSampleToggle}
+                />
               </div>
             </div>
 
-            {/* Sample Data Toggle */}
-            <div className="flex items-center gap-2">
-              <Label htmlFor="sample-toggle" className="text-xs text-slate-500 cursor-pointer">
-                Sample Data
-              </Label>
-              <Switch
-                id="sample-toggle"
-                checked={showSampleData}
-                onCheckedChange={handleSampleToggle}
-              />
+            {/* Input Mode Tabs */}
+            <div className="flex items-center gap-1 mt-4 bg-slate-900/60 rounded-lg p-1 w-fit">
+              <button
+                onClick={() => setInputMode('paste')}
+                className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-all duration-200 ${
+                  inputMode === 'paste'
+                    ? 'bg-slate-700/80 text-cyan-400 shadow-sm'
+                    : 'text-slate-500 hover:text-slate-300'
+                }`}
+              >
+                <FiCode className="w-4 h-4" />
+                Paste Code
+              </button>
+              <button
+                onClick={() => setInputMode('repo')}
+                className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-all duration-200 ${
+                  inputMode === 'repo'
+                    ? 'bg-slate-700/80 text-purple-400 shadow-sm'
+                    : 'text-slate-500 hover:text-slate-300'
+                }`}
+              >
+                <FiGithub className="w-4 h-4" />
+                GitHub Repo
+              </button>
             </div>
           </div>
         </header>
 
         {/* Main Content */}
         <main className="max-w-6xl mx-auto px-4 sm:px-6 py-6 space-y-6">
-          {/* Code Input */}
-          <CodeInput
-            code={code}
-            setCode={setCode}
-            fileName={fileName}
-            setFileName={setFileName}
-            language={language}
-            setLanguage={setLanguage}
-            onSubmit={handleSubmit}
-            loading={loading}
-          />
+          {/* Input Section — Paste Code or GitHub Repo */}
+          {inputMode === 'paste' ? (
+            <CodeInput
+              code={code}
+              setCode={setCode}
+              fileName={fileName}
+              setFileName={setFileName}
+              language={language}
+              setLanguage={setLanguage}
+              onSubmit={handleSubmit}
+              loading={loading}
+            />
+          ) : (
+            <RepoInput
+              onSubmitRepo={handleRepoSubmit}
+              loading={loading}
+            />
+          )}
 
           {/* Error Display */}
           {error && (
@@ -497,8 +605,20 @@ export default function Page() {
                   <FiCpu className="w-6 h-6 text-cyan-400 absolute inset-0 m-auto" />
                 </div>
                 <div className="text-center">
-                  <p className="text-sm font-medium text-slate-300">Analyzing your code...</p>
-                  <p className="text-xs text-slate-500 mt-1">This may take a moment for thorough analysis</p>
+                  <p className="text-sm font-medium text-slate-300">{loadingMessage}</p>
+                  <p className="text-xs text-slate-500 mt-1">
+                    {repoContext
+                      ? `Reviewing entire codebase of ${repoContext.owner}/${repoContext.repo}`
+                      : 'This may take a moment for thorough analysis'}
+                  </p>
+                  {repoContext && (
+                    <div className="flex items-center justify-center gap-2 mt-3">
+                      <VscRepo className="w-3.5 h-3.5 text-purple-400" />
+                      <span className="text-xs text-purple-400/80 font-mono">
+                        {repoContext.owner}/{repoContext.repo}@{repoContext.branch}
+                      </span>
+                    </div>
+                  )}
                 </div>
               </CardContent>
             </Card>
@@ -507,6 +627,22 @@ export default function Page() {
           {/* Results Dashboard */}
           {!loading && hasResults && (
             <div className="space-y-6">
+              {/* Repo Context Banner */}
+              {repoContext && !showSampleData && (
+                <Card className="border-purple-500/20 bg-purple-500/5">
+                  <CardContent className="p-3 flex items-center gap-3">
+                    <VscRepo className="w-5 h-5 text-purple-400 flex-shrink-0" />
+                    <div className="flex items-center gap-2 flex-wrap text-sm">
+                      <span className="text-slate-300 font-medium">Repository Review:</span>
+                      <span className="text-purple-400 font-mono text-xs bg-purple-500/10 px-2 py-0.5 rounded">
+                        {repoContext.owner}/{repoContext.repo}
+                      </span>
+                      <Badge className="bg-slate-700/50 text-slate-400 border-0 text-xs">{repoContext.branch}</Badge>
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+
               {/* Score Overview */}
               <ScoreOverview data={displayData as CodeReviewResult} />
 
@@ -543,10 +679,12 @@ export default function Page() {
                   Ready to Review Your Code
                 </h3>
                 <p className="text-sm text-slate-500 max-w-md mx-auto leading-relaxed">
-                  Paste your code, PR diff, or file content above to get an in-depth automated review covering code quality, security vulnerabilities, performance issues, and best practices.
+                  {inputMode === 'paste'
+                    ? 'Paste your code, PR diff, or file content above to get an in-depth automated review covering code quality, security vulnerabilities, performance issues, and best practices.'
+                    : 'Enter a GitHub repository URL above to fetch and analyze the entire codebase. All code files will be scanned for issues across quality, security, performance, and best practices.'}
                 </p>
                 <p className="text-xs text-slate-600 mt-4">
-                  Toggle "Sample Data" to see an example review.
+                  Toggle "Sample Data" to see an example review, or switch to "{inputMode === 'paste' ? 'GitHub Repo' : 'Paste Code'}" mode in the header.
                 </p>
               </CardContent>
             </Card>
