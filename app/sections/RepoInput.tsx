@@ -6,9 +6,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import { Checkbox } from '@/components/ui/checkbox'
-import { ScrollArea } from '@/components/ui/scroll-area'
-import { FiGithub, FiLoader, FiSearch, FiFile, FiFolder, FiCheck, FiX, FiAlertCircle } from 'react-icons/fi'
+import { FiGithub, FiLoader, FiSearch, FiFile, FiFolder, FiCheck, FiX, FiAlertCircle, FiSquare, FiCheckSquare } from 'react-icons/fi'
 import { VscRepo, VscGitBranch } from 'react-icons/vsc'
 
 export interface RepoFile {
@@ -16,11 +14,6 @@ export interface RepoFile {
   content: string
   size: number
   language: string
-}
-
-interface TreeItem {
-  path: string
-  size: number
 }
 
 interface RepoInputProps {
@@ -82,7 +75,6 @@ export default function RepoInput({ onSubmitRepo, loading }: RepoInputProps) {
   const [fetchedFiles, setFetchedFiles] = useState<RepoFile[]>([])
   const [repoInfo, setRepoInfo] = useState<{ owner: string; repo: string; branch: string } | null>(null)
   const [selectedPaths, setSelectedPaths] = useState<Set<string>>(new Set())
-  const [treeItems, setTreeItems] = useState<TreeItem[]>([])
   const [totalInRepo, setTotalInRepo] = useState(0)
 
   const handleFetch = useCallback(async () => {
@@ -91,7 +83,6 @@ export default function RepoInput({ onSubmitRepo, loading }: RepoInputProps) {
     setFetchError(null)
     setFetchedFiles([])
     setSelectedPaths(new Set())
-    setTreeItems([])
     setRepoInfo(null)
 
     try {
@@ -111,9 +102,7 @@ export default function RepoInput({ onSubmitRepo, loading }: RepoInputProps) {
       const files: RepoFile[] = Array.isArray(data.files) ? data.files : []
       setFetchedFiles(files)
       setRepoInfo({ owner: data.owner, repo: data.repo, branch: data.branch })
-      setTreeItems(Array.isArray(data.tree) ? data.tree : [])
       setTotalInRepo(data.totalFiles || files.length)
-      // Select all files by default
       setSelectedPaths(new Set(files.map((f: RepoFile) => f.path)))
     } catch (err) {
       setFetchError(err instanceof Error ? err.message : 'Network error fetching repository')
@@ -148,7 +137,6 @@ export default function RepoInput({ onSubmitRepo, loading }: RepoInputProps) {
     onSubmitRepo(selected, repoInfo)
   }, [fetchedFiles, selectedPaths, repoInfo, onSubmitRepo])
 
-  // Group files by directory
   const groupedFiles = React.useMemo(() => {
     const groups: Record<string, RepoFile[]> = {}
     fetchedFiles.forEach(file => {
@@ -157,11 +145,9 @@ export default function RepoInput({ onSubmitRepo, loading }: RepoInputProps) {
       if (!groups[dir]) groups[dir] = []
       groups[dir].push(file)
     })
-    // Sort directories
     return Object.entries(groups).sort(([a], [b]) => a.localeCompare(b))
   }, [fetchedFiles])
 
-  // Language stats
   const languageStats = React.useMemo(() => {
     const stats: Record<string, number> = {}
     fetchedFiles.forEach(f => {
@@ -309,8 +295,8 @@ export default function RepoInput({ onSubmitRepo, loading }: RepoInputProps) {
               </span>
             </div>
 
-            {/* File tree */}
-            <ScrollArea className="h-[300px] rounded-lg border border-slate-700/40 bg-slate-900/40">
+            {/* File tree - using native scrollable div instead of ScrollArea */}
+            <div className="h-[300px] overflow-y-auto rounded-lg border border-slate-700/40 bg-slate-900/40 scrollbar-thin">
               <div className="p-2 space-y-1">
                 {groupedFiles.map(([dir, files]) => (
                   <div key={dir}>
@@ -320,27 +306,30 @@ export default function RepoInput({ onSubmitRepo, loading }: RepoInputProps) {
                     </div>
                     {files.map((file) => {
                       const isSelected = selectedPaths.has(file.path)
-                      const fileName = file.path.split('/').pop() || file.path
+                      const fName = file.path.split('/').pop() || file.path
                       return (
-                        <label
+                        <button
                           key={file.path}
-                          className={`flex items-center gap-2.5 px-3 py-1.5 rounded-md cursor-pointer transition-colors ${
+                          type="button"
+                          onClick={() => handleToggleFile(file.path)}
+                          className={`flex items-center gap-2.5 px-3 py-1.5 rounded-md cursor-pointer transition-colors w-full text-left ${
                             isSelected
                               ? 'bg-cyan-500/5 hover:bg-cyan-500/10'
                               : 'hover:bg-slate-800/60'
                           }`}
                         >
-                          <Checkbox
-                            checked={isSelected}
-                            onCheckedChange={() => handleToggleFile(file.path)}
-                            className="border-slate-600 data-[state=checked]:bg-cyan-600 data-[state=checked]:border-cyan-600"
-                          />
+                          {/* Checkbox icon using react-icons */}
+                          {isSelected ? (
+                            <FiCheckSquare className="w-4 h-4 text-cyan-500 flex-shrink-0" />
+                          ) : (
+                            <FiSquare className="w-4 h-4 text-slate-600 flex-shrink-0" />
+                          )}
                           <div className="flex items-center justify-center w-6 h-5 rounded text-[10px] font-bold bg-slate-700/50 text-slate-400 flex-shrink-0">
                             {getFileIcon(file.path)}
                           </div>
                           <FiFile className="w-3 h-3 text-slate-600 flex-shrink-0" />
                           <span className={`text-xs font-mono truncate ${isSelected ? 'text-slate-200' : 'text-slate-400'}`}>
-                            {fileName}
+                            {fName}
                           </span>
                           <span className={`text-[10px] ml-auto flex-shrink-0 ${getLanguageColor(file.language)}`}>
                             {file.language}
@@ -348,13 +337,13 @@ export default function RepoInput({ onSubmitRepo, loading }: RepoInputProps) {
                           <span className="text-[10px] text-slate-600 flex-shrink-0 ml-1">
                             {formatSize(file.size)}
                           </span>
-                        </label>
+                        </button>
                       )
                     })}
                   </div>
                 ))}
               </div>
-            </ScrollArea>
+            </div>
 
             {/* Submit */}
             <div className="flex items-center justify-between pt-2">

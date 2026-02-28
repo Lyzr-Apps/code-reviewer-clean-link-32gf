@@ -7,7 +7,7 @@ import { Badge } from '@/components/ui/badge'
 import { Switch } from '@/components/ui/switch'
 import { Label } from '@/components/ui/label'
 import { Separator } from '@/components/ui/separator'
-import { FiGitPullRequest, FiCheckCircle, FiClock, FiFile, FiHash, FiActivity, FiCpu, FiGithub, FiCode } from 'react-icons/fi'
+import { FiGitPullRequest, FiCheckCircle, FiClock, FiFile, FiHash, FiActivity, FiCpu, FiGithub, FiEdit3 } from 'react-icons/fi'
 import { VscCode, VscRepo } from 'react-icons/vsc'
 
 import CodeInput from './sections/CodeInput'
@@ -544,7 +544,7 @@ ${fileContents}`
                     : 'text-slate-500 hover:text-slate-300'
                 }`}
               >
-                <FiCode className="w-4 h-4" />
+                <FiEdit3 className="w-4 h-4" />
                 Paste Code
               </button>
               <button
